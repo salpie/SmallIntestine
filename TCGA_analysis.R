@@ -8,6 +8,12 @@
 
 #Load Libraries
 library(data.table)
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+# functions
+'%!in%' <- function(x,y)!('%in%'(x,y))
 
 #############################################################
 ######## get 1Mb copy number calls from TCGA dataset ########
@@ -60,9 +66,13 @@ for (name in unique(tcga[,1])) {
 
 # load premade 1Mb TCGA samples and duodenals
 load("/Users/nowins01/Documents/Duodenal_project/Analysis/perf_cn/Merged_TCGA_DUODENALS_perfect.RData")
-Merge5$Chromosome.y <- NULL
-Merge5$Start.y <- NULL
-Merge5$End.y <- NULL
+Merge5$Start.y <-NULL
+Merge5$End.y <-NULL
+Merge5$Chromosome.y <-NULL
+Merge5$Start.x <-NULL
+Merge5$End.x <-NULL
+
+
 
 ############################################
 ################# PIC SCORE ################
@@ -84,6 +94,8 @@ get_diversity <- function(x) {
 PIC_SCORE = as.data.frame(apply(copy, 2, get_diversity))
 names(PIC_SCORE) <- "PIC"
 
+PIC_SCORE$sample <- rownames(PIC_SCORE)
+
 ############################################
 ################ GD/ploidy #################
 ############################################
@@ -95,11 +107,51 @@ gd$GD = 0
 for (name in names(Merge5)[4:ncol(Merge5)]) {
 	gd$GD[gd$sample==name] <- sum(Merge5[,name])/length(Merge5[,name])
 }
+
+
+# merge PIC and ploidy and PGA
+diversity_ploidy = merge(PIC_SCORE, gd, by="sample")
+
+# and clinical
+clin = data[,c(2,3)]
+diversity_ploidy_clin = merge(diversity_ploidy, clin, by.x="sample", by.y="case_submitter_id")
+
+# and duodenals
+DUO_clin = diversity_ploidy[diversity_ploidy$sample %!in% diversity_ploidy_clin$sample,]
+DUO_clin$project_id <- "Duodenum"
+
+total = rbind(diversity_ploidy_clin, DUO_clin)
+
+
+##################### PLOT
+
+ggplot(total, aes(x=project_id, y=PIC, fill=project_id)) +
+  geom_violin(trim=TRUE)+scale_fill_manual(values=c("#9986A5", "#79402E", "#CCBA72", "#0F0D0E", "#D9D0D3", "#8D8680"))+
+geom_boxplot(width=0.1, fill="white")
+
+
+# Plot along genome
+total %>%
+  ggplot( aes(x=year, y=n, group=name, color=name)) +
+    geom_line() +
+    scale_color_viridis(discrete = TRUE) +
+    ggtitle("Population-wde diversity") +
+    theme_ipsum() +
+    ylab("Diversity along genome")
 	
 gd$type <- "cohort"
 gd$type_RL <- "cohort"
 
 gd$clinical
+
+###################### 
+
+# PIC score along genome
+PIC_SCORE_bin = as.data.frame(apply(copy, 1, get_diversity))
+
+names = total[,c(1,4)]
+
+for (i in 1:
 
 
 

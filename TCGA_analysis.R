@@ -32,6 +32,31 @@ tcga$TCGA.D5.6536Sample <- gsub("-01", "", tcga$TCGA.D5.6536Sample)
 joined_df <- merge(coad_data, tcga, by.x = "case_submitter_id", 
              by.y = "TCGA.D5.6536Sample", all.x = TRUE, all.y = FALSE)
 
+# get the start and stop locations
+chrom_start_stop = Merge5[,c(1:3)]
+
+# add new column names to the chrom start and stop
+chrom_start_stop[,unique(tcga[,1])] <- NA
+
+for (name in unique(tcga[,1])) {
+	sub = tcga[tcga[,1]==name,]
+	for (i in 1:nrow(chrom_start_stop)) {
+		CN_rows = sub[(sub$Chromosome == chrom_start_stop$Chromosome[i]) & (sub$Start <= chrom_start_stop$Start[i]) & (sub$End >= chrom_start_stop$End[i]) | (sub$Chromosome == chrom_start_stop$Chromosome[i]) & (sub$Start <= chrom_start_stop$Start[i]) & (sub$End >= chrom_start_stop$Start[i]) | (sub$Chromosome == chrom_start_stop$Chromosome[i]) & (sub$Start <= chrom_start_stop$End[i]) & (sub$End >= chrom_start_stop$End[i]) | (sub$Chromosome == chrom_start_stop$Chromosome[i]) & (sub$Start >= chrom_start_stop$Start[i]) & (sub$End <= chrom_start_stop$End[i]),]
+		CN = CN_rows$Modal_Total_CN
+		if (dim(table(CN)) ==1) {
+			chrom_start_stop[i,name] <- CN[1]
+		}
+		if (dim(table(CN)) > 1) {
+			weights=vector()
+			for (r in 1:nrow(CN_rows)) {
+				weights=c(weights, sum(CN_rows$Start[r]:CN_rows$End[r] %in% chrom_start_stop$Start[i]:chrom_start_stop$End[i])/500000)
+			}
+			chrom_start_stop[i,name] <- weighted.mean(CN, weights)
+		}
+	}
+}
+
+
 
 # load premade 1Mb TCGA samples and duodenals
 load("/Users/nowins01/Documents/Duodenal_project/Analysis/perf_cn/Merged_TCGA_DUODENALS_perfect.RData")
@@ -43,7 +68,21 @@ Merge5$End.y <- NULL
 ################# PIC SCORE ################
 ############################################
 
+### convert tcga into ga
+copy = Merge5[,c(4:ncol(Merge5))]
+copy[copy >= 3] <- 3
+copy[copy < 2] <- 1
 
+## calculate diversity per bin - PIC score
+
+## number of samples that are loss at each bin
+
+get_diversity <- function(x) {
+	(1- ((sum(x == 1)/length(x))^2 + (sum(x == 2)/length(x))^2 + (sum(x == 3)/length(x))^2))
+}
+
+PIC_SCORE = as.data.frame(apply(copy, 2, get_diversity))
+names(PIC_SCORE) <- "PIC"
 
 ############################################
 ################ GD/ploidy #################
@@ -57,7 +96,10 @@ for (name in names(Merge5)[4:ncol(Merge5)]) {
 	gd$GD[gd$sample==name] <- sum(Merge5[,name])/length(Merge5[,name])
 }
 	
+gd$type <- "cohort"
+gd$type_RL <- "cohort"
 
+gd$clinical
 
 
 
